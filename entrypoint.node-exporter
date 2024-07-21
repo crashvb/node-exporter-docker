@@ -1,0 +1,36 @@
+#!/bin/bash
+
+set -e -o pipefail
+
+# Configure: node-exporter
+if [[ ! -e "${EP_RUN}" ]] ; then
+	log "Configuring $(basename "${0}") for first run ..."
+
+	# Generate keypairs ...
+	generate_rsakey node-exporter
+
+	ln --symbolic /etc/ssl/certs/node-exporterca.crt /usr/share/ca-certificates/
+	echo node-exporterca.crt >> /etc/ca-certificates.conf
+	update-ca-certificates
+
+	# .htpasswd ...
+	log "Generating: .htpasswd ..."
+	install --group=root --mode=0644 --owner=root /dev/null "${NODE_EXPORTER_CONFIG}/.htpasswd"
+	export NODE_EXPORTER_USERS="${NODE_EXPORTER_USERS:=prometheus}"
+	for i in $(echo "${NODE_EXPORTER_USERS}" | sed --expression="s/,/ /g"); do
+		user="${i,,}"
+		log "   ${user}"
+		generate_password "node_exporter_${user}"
+		var="NODE_EXPORTER_${user^^}_PASSWORD"
+		echo "${!var}" | htpasswd -iBC 10 "${NODE_EXPORTER_CONFIG}/.htpasswd" "${user}"
+	done
+	export NODE_EXPORTER_USERS="$(awk -F : '{print "  " $1 ": " $2}' "${NODE_EXPORTER_CONFIG}/.htpasswd")"
+
+	# web-config.yml
+	if [[ ! -e "${NODE_EXPORTER_CONFIG}/web-config.yml" ]] ; then
+		render_template /usr/local/share/node-exporter/web-config.yml "${NODE_EXPORTER_CONFIG}/web-config.yml"
+	else
+		log "Skipping: web-config.yml ..."
+	fi
+fi
+

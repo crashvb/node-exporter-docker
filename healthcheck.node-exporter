@@ -1,0 +1,16 @@
+#!/bin/bash
+
+set -e -o pipefail
+
+log "Checking if $(basename "${0}") is healthy ..."
+curl \
+	--cacert /run/secrets/node-exporterca.crt \
+	--cert /run/secrets/node-exporter.crt \
+	--key /run/secrets/node-exporter.key \
+	--output /dev/null \
+	--silent \
+	--user "prometheus:$(</run/secrets/node_exporter_prometheus_password)" \
+	--write-out "%{http_code}\n" \
+	"https://$(hostname):9100/-/healthy" | \
+grep 200
+
