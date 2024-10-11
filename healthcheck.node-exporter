@@ -3,14 +3,28 @@
 set -e -o pipefail
 
 log "Checking if $(basename "${0}") is healthy ..."
+
+common_name="$( \
+	openssl \
+		x509 \
+		-in /run/secrets/node-exporter.crt \
+		-nameopt multiline \
+		-noout \
+		-subject | \
+	grep commonName | \
+	awk '{print $3}' \
+)"
+echo "Common Name: ${common_name}"
+
 curl \
 	--cacert /run/secrets/node-exporterca.crt \
 	--cert /run/secrets/node-exporter.crt \
 	--key /run/secrets/node-exporter.key \
 	--output /dev/null \
 	--silent \
+	--resolve "${common_name}:9100:127.0.0.1" \
 	--user "prometheus:$(</run/secrets/node_exporter_prometheus_password)" \
 	--write-out "%{http_code}\n" \
-	"https://$(hostname):9100/-/healthy" | \
+	"https://${common_name}:9100/-/healthy" | \
 grep 200
 
